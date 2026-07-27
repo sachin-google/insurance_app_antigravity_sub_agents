@@ -2,83 +2,20 @@
 
 > A production-grade Android application built with Jetpack Compose, Kotlin Coroutines, StateFlow, and Clean Architecture — powered by **Automated AI Sub-Agents** for token-efficient, high-velocity development.
 
-## 📱 Project Lifecycle via `android` CLI Commands
+---
 
-This project was developed and managed using Google's **`android` CLI tool**. Below is the complete command reference used across all phases of the project lifecycle:
+## 📱 Application Features
 
-### 1. Environment & Skill Initialization
-```bash
-# Initialize Android CLI environment and agent skills
-android init
-```
-
-### 2. Project Scaffolding
-```bash
-# Create Jetpack Compose empty-activity template
-android create empty-activity \
-  --name="Claim Insurance App" \
-  --output=./claim_insurance_app \
-  --minSdk=24
-```
-
-### 3. SDK & Dependency Management
-```bash
-# List installed and available SDK packages
-android sdk list --all
-
-# Install required target Android SDK platform and build tools
-android sdk install platforms/android-34 build-tools;34.0.0
-
-# Update installed SDK components
-android sdk update
-```
-
-### 4. Emulator & Device Management
-```bash
-# List available Android Virtual Devices (AVDs)
-android emulator list
-
-# Create a virtual device
-android emulator create --name="Pixel_7_API_34"
-
-# Launch emulator and wait until fully booted
-android emulator start --name="Pixel_7_API_34"
-```
-
-### 5. Documentation Searching
-```bash
-# Search official Android Knowledge Base for Jetpack Compose & StateFlow guidance
-android docs search "Jetpack Compose StateFlow navigation"
-```
-
-### 6. Application Deployment & Running
-```bash
-# Build, deploy, and launch debug APK on connected device/emulator
-android run --debug
-```
-
-### 7. UI Layout & Visual Inspection
-```bash
-# Dump layout tree in formatted JSON for instant UI element debugging
-android layout --pretty
-
-# Capture device screen to file for visual verification
-android screen capture -o=screen_preview.png
-```
-
-### 8. Project Metadata Analysis
-```bash
-# Generate descriptive metadata and build artifact locations
-android describe --project_dir=.
-```
+* **Part A (Policyholder Section):** Primary insured details, claim financial breakdown, enclosed bills dynamic manager, bank account NEFT details, and digital signature canvas.
+* **Part B (Hospital Section):** Hospital registration details, treating doctor credentials, ICD-10 diagnosis codes, non-network infrastructure, and official seal/signature.
+* **Claim Summary & Review:** Real-time financial calculations, checklist validation status, and single-click insurance claim submission.
+* **Reimbursement Payout Confirmation:** Approved payout breakdown, direct NEFT bank payout tracker reference (`CLM-2026-889104`), and downloadable advice receipt.
 
 ---
 
 ## 🚀 Building Production-Grade Software with AI Sub-Agents
 
 This project demonstrates an advanced AI pair-programming architecture using **Google Antigravity Sub-Agents**. By offloading high-frequency, noisy tasks (such as build compilation logs, multi-file grepping, static linting, and instrumentation testing) to background sub-agents, we achieve **80-90% token savings** and maintain a clean, zero-bloat primary context window.
-
----
 
 ### 🧠 Tiered Model Strategy
 
@@ -121,15 +58,6 @@ git commit -m "ci: setup production AI sub-agent workflows"
 
 ---
 
-## 📱 Application Features
-
-* **Part A (Policyholder Section):** Primary insured details, claim financial breakdown, enclosed bills dynamic manager, bank account NEFT details, and digital signature canvas.
-* **Part B (Hospital Section):** Hospital registration details, treating doctor credentials, ICD-10 diagnosis codes, non-network infrastructure, and official seal/signature.
-* **Claim Summary & Review:** Real-time financial calculations, checklist validation status, and single-click insurance claim submission.
-* **Reimbursement Payout Confirmation:** Approved payout breakdown, direct NEFT bank payout tracker reference (`CLM-2026-889104`), and downloadable advice receipt.
-
----
-
 ## 🏗️ Project Architecture & Tech Stack
 
 * **UI Framework:** Jetpack Compose (Material3 Design System)
@@ -137,3 +65,65 @@ git commit -m "ci: setup production AI sub-agent workflows"
 * **Concurrency:** Kotlin Coroutines & Structured Concurrency
 * **Build System:** Gradle Kotlin DSL (`build.gradle.kts`)
 * **Testing:** JUnit, Compose Test Rule (`ComposeTestRule`), Sub-Agent E2E Verification
+
+---
+
+## 🤖 Automated `android` CLI Workflows (Powered by Antigravity)
+
+> **Note:** All the following Android CLI operations were **executed automatically by Google Antigravity** using the `android-cli` plugin throughout the creation, building, testing, and debugging phases. No manual command-line steps were required by the developer.
+
+### 1. Environment & Skill Initialization (Automated)
+```bash
+# Antigravity automatically initialized the Android CLI environment and agent skills
+android init
+```
+
+### 2. Project Scaffolding (Automated)
+```bash
+# Antigravity created the initial Jetpack Compose project structure automatically
+android create empty-activity \
+  --name="Claim Insurance App" \
+  --output=./claim_insurance_app \
+  --minSdk=24
+```
+
+### 3. SDK & Package Management (Automated)
+```bash
+# Antigravity detected missing SDK platforms and installed/updated them automatically
+android sdk list --all
+android sdk install platforms/android-34 build-tools;34.0.0
+android sdk update
+```
+
+### 4. Emulator & Virtual Device Management (Automated)
+```bash
+# Antigravity provisioned and booted virtual devices for test verification automatically
+android emulator list
+android emulator create --name="Pixel_7_API_34"
+android emulator start --name="Pixel_7_API_34"
+```
+
+### 5. Documentation Searching (Automated)
+```bash
+# Antigravity queried the Android Knowledge Base for API best practices automatically
+android docs search "Jetpack Compose StateFlow navigation"
+```
+
+### 6. App Deployment & Execution (Automated)
+```bash
+# Antigravity built and deployed debug APKs directly to emulators automatically
+android run --debug
+```
+
+### 7. Layout & Visual UI Inspection (Automated)
+```bash
+# Antigravity inspected Compose layout trees (JSON) & captured screenshots automatically
+android layout --pretty
+android screen capture -o=screen_preview.png
+```
+
+### 8. Project Structure & Metadata Analysis (Automated)
+```bash
+# Antigravity identified project targets and build artifacts automatically
+android describe --project_dir=.
+```

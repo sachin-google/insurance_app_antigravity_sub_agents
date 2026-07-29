@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/metrics/log_event.sh subagent_end",
+            "command": "./.agents/metrics/log_event.sh subagent_end",
             "timeout": 5
           }
         ]
@@ -17,8 +17,21 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/metrics/log_event.sh stop",
+            "command": "./.agents/metrics/log_event.sh stop",
             "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "hook-heartbeat-smoke-test": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.agents/metrics/log_event.sh heartbeat",
+            "timeout": 3
           }
         ]
       }

@@ -417,7 +417,7 @@ cat << 'EOF' > .agents/hooks.json
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/metrics/log_event.sh subagent_end",
+            "command": "./.agents/metrics/log_event.sh subagent_end",
             "timeout": 5
           }
         ]
@@ -428,8 +428,21 @@ cat << 'EOF' > .agents/hooks.json
         "hooks": [
           {
             "type": "command",
-            "command": ".agents/metrics/log_event.sh stop",
+            "command": "./.agents/metrics/log_event.sh stop",
             "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "hook-heartbeat-smoke-test": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.agents/metrics/log_event.sh heartbeat",
+            "timeout": 3
           }
         ]
       }
@@ -466,12 +479,29 @@ cat << 'EOF' > .agents/metrics/log_event.sh
 # one JSONL line per event to .agents/metrics/sessions/<conversationId>.jsonl.
 # On a Stop event, kicks off report.py for the just-finished session.
 #
-# Args: <event_kind>   one of: subagent_end | stop
+# Args: <event_kind>   one of: subagent_end | stop | heartbeat
 #
 # The hook must never fail loudly — it exits 0 unconditionally so agent runs
 # are never blocked by instrumentation.
 set +e
 EVENT_KIND="${1:-unknown}"
+
+# HEARTBEAT — the first thing we do is prove we fired. Absolute path so this
+# works no matter what CWD Antigravity uses. If /tmp/antigravity-hook.log is
+# empty after a run, Antigravity is not firing the hook at all (config
+# discovery or restart issue). If it has heartbeat lines but no subagent_end
+# lines, the `invoke_subagent` matcher name is wrong for your Antigravity
+# build — inspect a heartbeat line and adjust hooks.json accordingly.
+HEARTBEAT_LOG="/tmp/antigravity-hook.log"
+echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fired kind='${EVENT_KIND}' cwd='$(pwd)' argv='$*'" \
+  >> "$HEARTBEAT_LOG" 2>/dev/null
+
+# The `heartbeat` kind is only for the catch-all smoke-test matcher in
+# hooks.json — it exists so we know hooks are firing at all. Stop here so
+# we don't spam sessions/*.jsonl with one line per tool call.
+if [ "$EVENT_KIND" = "heartbeat" ]; then
+  exit 0
+fi
 
 # jq is required for defensive JSON extraction. If missing, log a stub and
 # exit cleanly — the collector degrades to invocation-count-only mode.

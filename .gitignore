@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Antigravity sub-agent runtime artifacts (regenerated per session)
+.agents/metrics/sessions/
+.agents/metrics/report-*.md
+.agents/metrics/__pycache__/

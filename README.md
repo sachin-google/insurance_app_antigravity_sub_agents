@@ -19,27 +19,27 @@ This project demonstrates an advanced AI pair-programming architecture using **G
 
 ### 🧠 Tiered Model Strategy
 
-To maximize speed and accuracy while minimizing token costs, sub-agents are allocated to Gemini Flash model tiers based on task complexity:
+Sub-agents are allocated to Antigravity model tiers (`flash` or `pro`) based on task complexity. Every sub-agent is a Markdown file with YAML frontmatter under `.agents/agents/`, discovered automatically by Antigravity 2.0.
 
-| Model Tier | Sub-Agent Role | Task Scope | Assigned Task Template | Why This Model Tier? |
+| Model Tier | Sub-Agent | Task Scope | File | Why This Tier? |
 | :--- | :--- | :--- | :--- | :--- |
-| **`3.5-flash-lite`** | **1. Fast Search & Indexer** | Grepping source files, finding string resources, listing dependencies. | [.agent/tasks/fast_search_indexer.md](file://.agent/tasks/fast_search_indexer.md) | High-frequency regex & file lookups requiring minimum latency and zero heavy reasoning. |
-| **`3.5-flash-lite`** | **2. Build & Log Debugger** | Runs `./gradlew assembleDebug` or `./gradlew test`, extracts stack traces silently. | [.agent/tasks/build_diagnostics.md](file://.agent/tasks/build_diagnostics.md) | Keeps 5,000+ line Gradle compilation logs out of the main context window. |
-| **`3.5-flash-lite`** | **3. Android Lint & Formatter** | Runs `./gradlew lint`, Detekt, or Spotless formatting checks. | [.agent/tasks/android_lint_checker.md](file://.agent/tasks/android_lint_checker.md) | Rule-based static code analysis checking with deterministic fixes. |
-| **`3.6-flash`** | **4. Architecture & Quality Auditor** | Audits Jetpack Compose state isolation, ViewModel null-safety, Hilt DI, & Room DB schemas. | [.agent/tasks/codebase_audit.md](file://.agent/tasks/codebase_audit.md) | High-speed reasoning needed for Clean Architecture (MVVM/MVI) without unnecessary cost. |
-| **`3.6-flash`** | **5. Unit Test Generator** | Generates JUnit5, MockK, Coroutines `runTest`, & Turbine StateFlow tests in a Git branch. | [.agent/tasks/unit_test_generator.md](file://.agent/tasks/unit_test_generator.md) | Requires understanding class contracts & mocking dependencies cleanly. |
-| **`3.6-flash`** | **6. E2E & Compose UI Tester** | Writes & executes `ComposeTestRule` instrumentation tests for multi-screen user journeys. | [.agent/tasks/e2e_testing.md](file://.agent/tasks/e2e_testing.md) | High-level spatial & state tree reasoning required to test multi-screen UI flows. |
-| **`3.6-flash`** | **7. Perf & Memory Leak Debugger** | Analyzes Heap Dumps (`.hprof`), LeakCanary traces, Compose re-composition jank, & rendering drops. | [.agent/tasks/perf_memory_debugger.md](file://.agent/tasks/perf_memory_debugger.md) | Deep diagnostic reasoning needed to trace un-cancelled jobs, retained Activity contexts, or memory leaks. |
+| **`flash`** | **1. Fast Search & Indexer** | Grepping source files, finding string resources, listing dependencies. | [.agents/agents/fast-search-indexer.md](file://.agents/agents/fast-search-indexer.md) | High-frequency regex & file lookups requiring minimum latency and zero heavy reasoning. |
+| **`flash`** | **2. Build & Log Debugger** | Runs `./gradlew assembleDebug` or `./gradlew test`, extracts stack traces silently. | [.agents/agents/build-diagnostics.md](file://.agents/agents/build-diagnostics.md) | Keeps 5,000+ line Gradle compilation logs out of the main context window. |
+| **`flash`** | **3. Android Lint & Formatter** | Runs `./gradlew lint`, Detekt, or Spotless formatting checks. | [.agents/agents/android-lint-checker.md](file://.agents/agents/android-lint-checker.md) | Rule-based static code analysis checking with deterministic fixes. |
+| **`pro`** | **4. Architecture & Quality Auditor** | Audits Jetpack Compose state isolation, ViewModel null-safety, Hilt DI, & Room DB schemas. | [.agents/agents/codebase-auditor.md](file://.agents/agents/codebase-auditor.md) | Deep reasoning needed for Clean Architecture (MVVM/MVI) audits across many files. |
+| **`pro`** | **5. Unit Test Generator** | Generates JUnit5, MockK, Coroutines `runTest`, & Turbine StateFlow tests. Invoked in `Workspace: branch`. | [.agents/agents/unit-test-generator.md](file://.agents/agents/unit-test-generator.md) | Requires understanding class contracts & mocking dependencies cleanly. |
+| **`pro`** | **6. E2E & Compose UI Tester** | Writes & executes `ComposeTestRule` instrumentation tests for multi-screen user journeys. Invoked in `Workspace: branch`. | [.agents/agents/e2e-tester.md](file://.agents/agents/e2e-tester.md) | High-level spatial & state-tree reasoning required to test multi-screen UI flows. |
+| **`pro`** | **7. Perf & Memory Leak Debugger** | Analyzes Heap Dumps (`.hprof`), LeakCanary traces, Compose re-composition jank, & rendering drops. | [.agents/agents/perf-memory-debugger.md](file://.agents/agents/perf-memory-debugger.md) | Deep diagnostic reasoning needed to trace un-cancelled jobs, retained Activity contexts, or memory leaks. |
 
 ---
 
 ## ⚙️ Automated Developer Workflow Rules
 
-Sub-agent delegation is enforced automatically via workspace rules in [.gemini/rules/subagent_delegation_rules.md](file://.gemini/rules/subagent_delegation_rules.md) and [.agent/rules.md](file://.agent/rules.md):
+Sub-agent delegation is enforced automatically via the workspace rule in [.agents/rules/subagent_delegation.md](file://.agents/rules/subagent_delegation.md). Antigravity 2.0's planner reads each sub-agent's `description` frontmatter to decide when to delegate:
 
-1. **Automatic Build Verification:** Any code edit triggers a background `build_diagnostics` sub-agent (`3.5-flash-lite`). The main context receives only a 3-line status summary (Status, Error Line, Fix).
-2. **Automatic Code Search:** Multi-file queries or dependency audits trigger a `fast_search_indexer` or `codebase_audit` sub-agent (`3.5-flash-lite` / `3.6-flash`). Raw search dumps never touch the main thread.
-3. **Isolated Test Generation:** Unit and E2E Compose UI tests are drafted by sub-agents operating in isolated Git branch workspaces (`Workspace: "branch"`).
+1. **Automatic Build Verification:** Any `./gradlew` invocation is routed to `build-diagnostics` (`flash`). The main context receives only a 4-line summary (Status, Error Location, Root Cause, Suggested Fix).
+2. **Automatic Code Search:** Multi-file greps and symbol lookups are routed to `fast-search-indexer` (`flash`); architectural audits go to `codebase-auditor` (`pro`). Raw search dumps never touch the main thread.
+3. **Isolated Test Generation:** `unit-test-generator` and `e2e-tester` (`pro`) are invoked in `Workspace: branch`, so drafted `*Test.kt` files land in an isolated Git worktree and only merge back once green.
 
 ---
 
@@ -51,10 +51,16 @@ To equip any new Android or Gradle project with this sub-agent framework, run th
 # Run in the root of your Android project
 ./setup_subagents.sh
 
-# Commit the configuration to Git
-git add .gemini/ .agent/
-git commit -m "ci: setup production AI sub-agent workflows"
+# Commit the generated configuration to Git
+git add .agents/
+git commit -m "ci: setup Antigravity 2.0 sub-agent workflows"
 ```
+
+Then open the project in Antigravity 2.0 and prompt, e.g.:
+
+> "Build an Android App for the claim_form.pdf. This app should be modern and be delightful to use."
+
+Antigravity's main agent reads the PDF, scaffolds the Jetpack Compose project, and delegates all noisy or specialized work (Gradle logs, multi-file greps, lint reports, test generation, E2E, perf) to the sub-agents.
 
 ---
 

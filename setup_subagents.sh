@@ -11,6 +11,7 @@ echo "🚀 Setting up Antigravity 2.0 sub-agents for production Android developm
 
 mkdir -p .agents/rules
 mkdir -p .agents/agents
+mkdir -p .agents/metrics/sessions
 
 # ------------------------------------------------------------------------------
 # .agents/rules/subagent_delegation.md  (workspace rule, Always On)
@@ -394,6 +395,293 @@ You are a memory and performance diagnostic engineer.
 - **Fix:** minimal code change (file:line + snippet).
 EOF
 
+# ==============================================================================
+# TOKEN / COST METRICS
+# Antigravity's hook payloads do not include token counts, so we log every
+# invoke_subagent invocation via a PostToolUse hook, and best-effort extract
+# usage from transcript.jsonl at report time. Full A/B story:
+#   1. rename .agents/ -> .agents.off/, run the prompt (baseline)
+#   2. rename back, re-run the same prompt (instrumented)
+#   3. .agents/metrics/report.py --all  →  Markdown cost breakdown
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# .agents/hooks.json  (registers the collector)
+# ------------------------------------------------------------------------------
+cat << 'EOF' > .agents/hooks.json
+{
+  "subagent-token-logger": {
+    "PostToolUse": [
+      {
+        "matcher": "invoke_subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/metrics/log_event.sh subagent_end",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/metrics/log_event.sh stop",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+
+# ------------------------------------------------------------------------------
+# .agents/metrics/pricing.json  (per-1M-token rates — edit for your contract)
+# Approximate Gemini 2.5 list prices at time of writing.
+# ------------------------------------------------------------------------------
+cat << 'EOF' > .agents/metrics/pricing.json
+{
+  "pro": {
+    "in_per_1M":     1.25,
+    "cached_per_1M": 0.3125,
+    "out_per_1M":    10.00
+  },
+  "flash": {
+    "in_per_1M":     0.30,
+    "cached_per_1M": 0.075,
+    "out_per_1M":    2.50
+  }
+}
+EOF
+
+# ------------------------------------------------------------------------------
+# .agents/metrics/log_event.sh  (invoked by hooks)
+# ------------------------------------------------------------------------------
+cat << 'EOF' > .agents/metrics/log_event.sh
+#!/usr/bin/env bash
+# Called by .agents/hooks.json. Reads the hook payload from stdin and appends
+# one JSONL line per event to .agents/metrics/sessions/<conversationId>.jsonl.
+# On a Stop event, kicks off report.py for the just-finished session.
+#
+# Args: <event_kind>   one of: subagent_end | stop
+#
+# The hook must never fail loudly — it exits 0 unconditionally so agent runs
+# are never blocked by instrumentation.
+set +e
+EVENT_KIND="${1:-unknown}"
+
+# jq is required for defensive JSON extraction. If missing, log a stub and
+# exit cleanly — the collector degrades to invocation-count-only mode.
+if ! command -v jq >/dev/null 2>&1; then
+  mkdir -p .agents/metrics/sessions
+  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"kind\":\"$EVENT_KIND\",\"error\":\"jq not installed\"}" \
+    >> .agents/metrics/sessions/unknown.jsonl
+  exit 0
+fi
+
+PAYLOAD=$(cat)
+CID=$(printf '%s' "$PAYLOAD"      | jq -r '.conversationId // "unknown"')
+STEP=$(printf '%s' "$PAYLOAD"     | jq -r '.stepIdx // empty')
+TPATH=$(printf '%s' "$PAYLOAD"    | jq -r '.transcriptPath // empty')
+# invoke_subagent's args field may hold the sub-agent name under several keys;
+# try each in turn.
+SUBAGENT=$(printf '%s' "$PAYLOAD" | jq -r '
+  .toolCall.args.name //
+  .toolCall.args.agent //
+  .toolCall.args.subagent //
+  .toolCall.args.agentName //
+  empty
+')
+
+mkdir -p .agents/metrics/sessions
+OUT=".agents/metrics/sessions/${CID}.jsonl"
+
+jq -cn \
+  --arg ts       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg kind     "$EVENT_KIND" \
+  --arg cid      "$CID" \
+  --arg step     "$STEP" \
+  --arg subagent "$SUBAGENT" \
+  --arg tpath    "$TPATH" \
+  '{ts:$ts, kind:$kind, conversation_id:$cid, step_idx:$step, subagent:$subagent, transcript_path:$tpath}' \
+  >> "$OUT" 2>/dev/null
+
+# On Stop, run the aggregator against just this session.
+if [ "$EVENT_KIND" = "stop" ] && [ -x .agents/metrics/report.py ]; then
+  .agents/metrics/report.py "$OUT" > ".agents/metrics/report-${CID}.md" 2>/dev/null
+fi
+
+exit 0
+EOF
+
+# ------------------------------------------------------------------------------
+# .agents/metrics/report.py  (aggregator)
+# ------------------------------------------------------------------------------
+cat << 'EOF' > .agents/metrics/report.py
+#!/usr/bin/env python3
+"""Aggregate .agents/metrics/sessions/*.jsonl into a token / cost report.
+
+Usage:
+    report.py [session_file.jsonl ...]
+    report.py --all      # every session under .agents/metrics/sessions/
+
+For an A/B baseline vs sub-agent comparison, save a baseline report as
+`.agents/metrics/baseline.md` (rename an earlier `report-*.md`); this script
+prints a pointer to it so the two are easy to diff.
+"""
+import glob, json, os, re, sys
+from collections import defaultdict
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PRICING_PATH = os.path.join(HERE, 'pricing.json')
+
+def load_pricing():
+    with open(PRICING_PATH) as fh:
+        return json.load(fh)
+
+def load_agent_tiers():
+    """Map subagent name -> model tier by parsing .agents/agents/*.md frontmatter."""
+    tiers = {}
+    for path in glob.glob('.agents/agents/*.md'):
+        try:
+            with open(path) as fh:
+                fm = fh.read().split('---')[1]
+            name  = re.search(r'^name:\s*(\S+)',  fm, re.M).group(1)
+            model = re.search(r'^model:\s*(\S+)', fm, re.M).group(1)
+            tiers[name] = model
+        except Exception:
+            continue
+    return tiers
+
+def try_extract_tokens(transcript_path):
+    """Best-effort parse transcript.jsonl for token usage. Returns list of
+    dicts {model, in_tok, out_tok, cached_tok}. Empty list if the schema
+    doesn't expose usage — invocation counts still work in that case."""
+    if not transcript_path or not os.path.exists(transcript_path):
+        return []
+    events = []
+    with open(transcript_path) as fh:
+        for line in fh:
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            usage = (obj.get('usage')
+                     or obj.get('tokenUsage')
+                     or obj.get('token_usage'))
+            if not usage:
+                continue
+            in_tok  = (usage.get('input_tokens')     or usage.get('inputTokens')
+                       or usage.get('promptTokens')  or 0)
+            out_tok = (usage.get('output_tokens')    or usage.get('outputTokens')
+                       or usage.get('completionTokens') or 0)
+            cached  = (usage.get('cached_tokens')    or usage.get('cachedTokens')
+                       or usage.get('cache_read_tokens') or 0)
+            model   = obj.get('model') or obj.get('modelId') or ''
+            events.append(dict(model=model, in_tok=in_tok, out_tok=out_tok, cached_tok=cached))
+    return events
+
+def cost(pricing, tier, in_t, out_t, cached_t):
+    p = pricing.get(tier, {})
+    billable_in = max(0, in_t - cached_t)
+    return (billable_in * p.get('in_per_1M',     0)
+          + cached_t    * p.get('cached_per_1M', 0)
+          + out_t       * p.get('out_per_1M',    0)) / 1_000_000
+
+def main():
+    args = sys.argv[1:]
+    if not args or args == ['--all']:
+        files = sorted(glob.glob('.agents/metrics/sessions/*.jsonl'))
+    else:
+        files = args
+    if not files:
+        print("No session files found under .agents/metrics/sessions/")
+        return 1
+
+    pricing = load_pricing()
+    tiers   = load_agent_tiers()
+
+    per_agent = defaultdict(lambda: dict(invocations=0, in_tok=0, out_tok=0, cached_tok=0))
+    main_agent = dict(in_tok=0, out_tok=0, cached_tok=0)
+    transcripts_seen = set()
+
+    for f in files:
+        with open(f) as fh:
+            for line in fh:
+                try:
+                    ev = json.loads(line)
+                except Exception:
+                    continue
+                if ev.get('kind') == 'subagent_end':
+                    per_agent[ev.get('subagent') or 'unknown']['invocations'] += 1
+                tpath = ev.get('transcript_path')
+                if tpath and tpath not in transcripts_seen:
+                    transcripts_seen.add(tpath)
+                    for tok in try_extract_tokens(tpath):
+                        # Attribution note: without a per-event agent-name field in
+                        # transcript.jsonl we can't split main-vs-sub cleanly.
+                        # Assume everything is main-agent for now — sub-agents get
+                        # only their invocation counts. Refine once schema is known.
+                        main_agent['in_tok']     += tok['in_tok']
+                        main_agent['out_tok']    += tok['out_tok']
+                        main_agent['cached_tok'] += tok['cached_tok']
+
+    lines = []
+    lines.append('# Token / Cost Report')
+    lines.append('')
+    lines.append('| Agent | Model | Invocations | In tok | Out tok | Cached | Est. $ |')
+    lines.append('| --- | --- | ---: | ---: | ---: | ---: | ---: |')
+
+    total_cost = 0.0
+    total_in = total_out = 0
+
+    if main_agent['in_tok'] or main_agent['out_tok']:
+        c = cost(pricing, 'pro', main_agent['in_tok'],
+                 main_agent['out_tok'], main_agent['cached_tok'])
+        total_cost += c
+        total_in   += main_agent['in_tok']
+        total_out  += main_agent['out_tok']
+        lines.append(f"| main | pro | — | {main_agent['in_tok']:,} | "
+                     f"{main_agent['out_tok']:,} | {main_agent['cached_tok']:,} | ${c:.4f} |")
+
+    for name, agg in sorted(per_agent.items()):
+        tier = tiers.get(name, 'flash')
+        c = cost(pricing, tier, agg['in_tok'], agg['out_tok'], agg['cached_tok'])
+        total_cost += c
+        total_in   += agg['in_tok']
+        total_out  += agg['out_tok']
+        lines.append(f"| {name} | {tier} | {agg['invocations']} | {agg['in_tok']:,} | "
+                     f"{agg['out_tok']:,} | {agg['cached_tok']:,} | ${c:.4f} |")
+
+    lines.append('')
+    lines.append(f"**Total tokens:** {total_in:,} in / {total_out:,} out")
+    lines.append(f"**Total est. cost:** ${total_cost:.4f}")
+    lines.append('')
+
+    if total_in == 0 and any(a['invocations'] for a in per_agent.values()):
+        lines.append('_Token counts were not present in `transcript.jsonl`; '
+                     'invocation counts above are still reliable. Cross-check '
+                     "the dollar figure against Antigravity's built-in usage panel._")
+
+    baseline = '.agents/metrics/baseline.md'
+    if os.path.exists(baseline):
+        lines.append('')
+        lines.append('---')
+        lines.append(f'Compare with `{baseline}` for the A/B story.')
+
+    print('\n'.join(lines))
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
+EOF
+
+chmod +x .agents/metrics/log_event.sh
+chmod +x .agents/metrics/report.py
+
 chmod +x setup_subagents.sh
 
 echo "✅ Antigravity 2.0 sub-agent setup complete."
@@ -408,6 +696,21 @@ echo "   .agents/agents/codebase-auditor.md                (pro)"
 echo "   .agents/agents/unit-test-generator.md             (pro, invoke with Workspace: branch)"
 echo "   .agents/agents/e2e-tester.md                      (pro, invoke with Workspace: branch)"
 echo "   .agents/agents/perf-memory-debugger.md            (pro)"
+echo "   .agents/hooks.json                                (PostToolUse + Stop hooks)"
+echo "   .agents/metrics/log_event.sh                      (hook target)"
+echo "   .agents/metrics/report.py                         (aggregator)"
+echo "   .agents/metrics/pricing.json                      (edit for your contract)"
 echo ""
 echo "Next: open the project in Antigravity 2.0 and prompt e.g."
 echo '  "Build an Android App for the claim_form.pdf. Modern and delightful to use."'
+echo ""
+echo "Then generate a cost report:"
+echo "  .agents/metrics/report.py --all > report.md"
+echo ""
+echo "For the A/B story (baseline vs sub-agents):"
+echo "  1. mv .agents .agents.off && <run prompt> && mv .agents.off .agents"
+echo "  2. save baseline report as .agents/metrics/baseline.md"
+echo "  3. <run prompt again with sub-agents>"
+echo "  4. .agents/metrics/report.py --all  →  diffs vs baseline.md"
+echo ""
+echo "⚠  Add .agents/metrics/sessions/ and .agents/metrics/report-*.md to .gitignore"

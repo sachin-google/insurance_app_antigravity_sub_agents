@@ -1,0 +1,3 @@
+{"ts":"2026-07-29T11:30:37Z","kind":"subagent_end","conversation_id":"demo-abc","step_idx":"4","subagent":"build-diagnostics","transcript_path":"/tmp/tmp.N9qfdWbXH8"}
+{"ts":"2026-07-29T11:30:37Z","kind":"subagent_end","conversation_id":"demo-abc","step_idx":"7","subagent":"fast-search-indexer","transcript_path":"/tmp/tmp.N9qfdWbXH8"}
+{"ts":"2026-07-29T11:30:37Z","kind":"stop","conversation_id":"demo-abc","step_idx":"","subagent":"","transcript_path":"/tmp/tmp.N9qfdWbXH8"}

@@ -1,0 +1,12 @@
+{
+  "pro": {
+    "in_per_1M":     1.25,
+    "cached_per_1M": 0.3125,
+    "out_per_1M":    10.00
+  },
+  "flash": {
+    "in_per_1M":     0.30,
+    "cached_per_1M": 0.075,
+    "out_per_1M":    2.50
+  }
+}

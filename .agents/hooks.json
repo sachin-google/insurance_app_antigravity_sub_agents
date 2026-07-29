@@ -1,0 +1,27 @@
+{
+  "subagent-token-logger": {
+    "PostToolUse": [
+      {
+        "matcher": "invoke_subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/metrics/log_event.sh subagent_end",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/metrics/log_event.sh stop",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

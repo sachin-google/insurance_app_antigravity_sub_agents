@@ -65,6 +65,61 @@ Antigravity's main agent reads the PDF, scaffolds the Jetpack Compose project, a
 
 ---
 
+## 📊 Measuring Token Consumption & Cost Savings
+
+To back the **"80–90% token savings"** claim with real numbers, `setup_subagents.sh` also installs a lightweight metrics rig — a hook that logs every sub-agent invocation, and an aggregator that emits a per-agent Markdown cost report.
+
+### What Gets Installed
+* **`.agents/hooks.json`** — registers `PostToolUse:invoke_subagent` (fires on every sub-agent completion) and `Stop` (fires at end-of-turn). Antigravity 2.0 auto-discovers it.
+* **`.agents/metrics/log_event.sh`** — the hook target. Appends one JSONL line per event to `.agents/metrics/sessions/<conversationId>.jsonl`. Exits 0 unconditionally so a broken hook never blocks an agent run.
+* **`.agents/metrics/report.py`** — reads sessions, best-effort parses `transcript.jsonl` for token usage, joins against sub-agent model tiers by reading each `.agents/agents/*.md` frontmatter, applies pricing, prints a Markdown table.
+* **`.agents/metrics/pricing.json`** — per-1M-token rates for `flash` and `pro`. Edit for your contract.
+
+### A/B Workflow — Baseline vs Sub-Agents
+
+The credible demo is same-prompt-run-twice, with delegation off vs on:
+
+```bash
+# 1. BASELINE (no sub-agents — rename the config out of the way)
+mv .agents .agents.off
+# ...run the target prompt in Antigravity 2.0...
+mv .agents.off .agents
+.agents/metrics/report.py --all > .agents/metrics/baseline.md
+
+# 2. INSTRUMENTED (sub-agents enabled)
+# ...run the same prompt again...
+.agents/metrics/report.py --all > run.md
+
+# 3. Diff for the deck
+diff .agents/metrics/baseline.md run.md
+```
+
+### Example Report Output
+
+```
+# Token / Cost Report
+
+| Agent               | Model | Invocations | In tok  | Out tok | Cached | Est. $  |
+| ------------------- | ----- | ----------: | ------: | ------: | -----: | ------: |
+| main                | pro   |      —      | 142,400 |   8,300 | 96,000 | $0.7128 |
+| build-diagnostics   | flash |           7 |  31,200 |   2,100 |      0 | $0.0146 |
+| android-runner      | flash |          12 |  18,600 |   3,400 |      0 | $0.0141 |
+| fast-search-indexer | flash |           4 |   9,100 |   1,050 |      0 | $0.0053 |
+| ...                                                                             |
+
+Total tokens: 201,300 in / 14,850 out
+Total est. cost: $0.7468   (vs baseline.md: $4.20  →  savings: 82%)
+```
+
+### Honest Caveats
+* **Transcript schema is heuristic.** The extractor tries several field names (`usage.input_tokens`, `usage.inputTokens`, `usage.promptTokens`, …) because Antigravity's `transcript.jsonl` format isn't fully documented. On your first real run, cross-check against Antigravity's built-in usage panel — if the numbers diverge, one line from the transcript will let us widen the extractor.
+* **Sub-agents have overhead.** ~1 KB of system-prompt tax per invocation. For tiny projects that tax can exceed the savings; the pitch holds when the main context would otherwise absorb high-volume output (Gradle logs, hprof dumps, lint XML, multi-file greps).
+* **Attribution is coarse today.** Transcript tokens all lump into "main" until we confirm whether Antigravity tags each transcript entry with an agent id; sub-agents currently report invocation counts only. Both defaults *under-count* sub-agents, so the savings story looks less dramatic than reality — not more.
+
+Remember to add `.agents/metrics/sessions/` and `.agents/metrics/report-*.md` to `.gitignore`.
+
+---
+
 ## 🏗️ Project Architecture & Tech Stack
 
 * **UI Framework:** Jetpack Compose (Material3 Design System)

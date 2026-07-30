@@ -394,7 +394,7 @@ You are a memory and performance diagnostic engineer.
 - **Fix:** minimal code change (file:line + snippet).
 EOF
 
-chmod +x setup_subagents.sh
+#chmod +x setup_subagents.sh
 
 echo "✅ Antigravity 2.0 sub-agent setup complete."
 echo ""
